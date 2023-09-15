@@ -6,9 +6,9 @@ import re
 import inquirer
 from pytube import YouTube
 import urllib.request
-import eyed3
+import music_tag
 load_dotenv()
-tracks = [] 
+tracks = {}
 
 def auth():
     global session 
@@ -21,7 +21,7 @@ def get_playlist_id(url):
     id = re.search('(?<=playlist\/)(.*)(?=\?)', url).group(0)
     tracks_raw = session.playlist_tracks(id)["items"]
     for track in tracks_raw:
-        tracks.append(track["track"]["name"]+ " by " + track["track"]["artists"][0]["name"])
+        tracks[track["track"]["name"]] = [track["track"]["artists"][0]["name"], track["track"]["album"]["name"]]
     download_path = os.getcwd()+"/"+session.playlist(id)["name"]
     if not os.path.exists(download_path):
         os.mkdir(download_path)
@@ -30,7 +30,7 @@ def get_album_id(url):
     id = re.search('(?<=album\/)(.*)(?=\?)', url).group(0)
     tracks_raw = session.album_tracks(id)["items"]
     for track in tracks_raw:
-        tracks.append(track["name"]+ " by " + track["artists"][0]["name"])
+        tracks[track["track"]["name"]] = [track["track"]["artists"][0]["name"], track["track"]["album"]["name"]]
     download_path = os.getcwd()+"/"+session.album(id)["name"]
     if not os.path.exists(download_path):
         os.mkdir(download_path)
@@ -38,30 +38,30 @@ def get_album_id(url):
 def get_song_id(url):
     id = re.search('(?<=track\/)(.*)(?=\?)', url).group(0)
     track = session.track(id)
-    tracks.append(track["name"]+ " by " + track["artists"][0]["name"])
+    tracks[track["track"]["name"]] = [track["track"]["artists"][0]["name"], track["track"]["album"]["name"]]
 def download(download_path):
     video_links = {}
     for track in tracks:
-        print("Searching for " + track + "...")
-        link = "https://www.youtube.com/results?search_query=" + track.replace(" ", "+") + "+lyrics"
+        track_name = track + " by " + tracks[track][0]
+        print("Searching for " + track_name + "...")
+        link = "https://www.youtube.com/results?search_query=" + track_name.replace(" ", "+") + "+lyrics"
         try:
             html = urllib.request.urlopen(link)
         except UnicodeEncodeError:
-            regex = r'(\w|\s)*'
-            matches = re.finditer(regex, track, re.DOTALL)
-            new_track = ""
-            for matchNum, match in enumerate(matches):
-                matchNum = matchNum + 1
-                new_track += match.group()
-            link = "https://www.youtube.com/results?search_query=" + new_track.replace(" ", "+") + "+lyrics"
-            html = urllib.request.urlopen(link)  
+            link = "https://www.youtube.com/results?search_query=" + track_name.encode('ascii', 'ignore').decode().replace(" ", "+") + "+lyrics"
+            html = urllib.request.urlopen(link)
         video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
         if "/" in track:
             track = track.replace("/", "-")
         video_links[track] = "https://www.youtube.com/watch?v=" + video_ids[0]
     for track in video_links:
         print("Downloading " + track + "...")
-        YouTube(video_links[track]).streams.filter(only_audio=True).first().download(filename=f"{track.split(' by')[0]}.mp3", output_path=download_path)
+        file = f"{track.split(' by')[0]}.mp3"
+        YouTube(video_links[track]).streams.filter(only_audio=True).first().download(filename=file, output_path=download_path)
+        f = music_tag.load_file(download_path+"/"+file)
+        f["artist"] = tracks[track][0]
+        f["album"] = tracks[track][1]
+        f.save()
 
 def main():
 
