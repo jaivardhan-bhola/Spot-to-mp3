@@ -38,7 +38,7 @@ def get_album_id(url):
 def get_song_id(url):
     id = re.search('(?<=track\/)(.*)(?=\?)', url).group(0)
     track = session.track(id)
-    tracks[track["track"]["name"]] = [track["track"]["artists"][0]["name"], track["track"]["album"]["name"]]
+    tracks[track["name"]] = [track["artists"][0]["name"], track["album"]["name"]]
 def download(download_path):
     video_links = {}
     for track in tracks:
